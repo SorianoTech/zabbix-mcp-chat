@@ -1,0 +1,3 @@
+[submodule "zabbix-mcp-server"]
+	path = zabbix-mcp-server
+	url = https://github.com/SorianoTech/zabbix-mcp-server.git
