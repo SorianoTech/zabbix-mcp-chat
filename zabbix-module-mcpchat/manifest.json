@@ -1,0 +1,35 @@
+{
+	"manifest_version": 2.0,
+	"id": "mcpchat",
+	"name": "MCP Chat",
+	"namespace": "McpChat",
+	"version": "1.0",
+	"author": "Proyecto MCP",
+	"description": "Globo de chat en toda la interfaz para consultar Zabbix en lenguaje natural mediante un LLM y el servidor MCP de Zabbix.",
+	"actions": {
+		"mcpchat.status": {
+			"class": "ChatStatus",
+			"layout": "layout.json"
+		},
+		"mcpchat.send": {
+			"class": "ChatSend",
+			"layout": "layout.json"
+		},
+		"mcpchat.reset": {
+			"class": "ChatReset",
+			"layout": "layout.json"
+		}
+	},
+	"assets": {
+		"css": ["mcpchat.css"],
+		"js": ["mcpchat.js"]
+	},
+	"config": {
+		"gateway_url": "http://127.0.0.1:8770",
+		"gateway_api_key": "",
+		"min_user_type": 3,
+		"timeout": 180,
+		"title": "Asistente Zabbix",
+		"delegate_user_session": true
+	}
+}

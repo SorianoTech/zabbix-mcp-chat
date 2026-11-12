@@ -1,0 +1,317 @@
+/* MCP Chat: globo flotante. Variables claras por defecto; Zabbix marca el tema oscuro con
+   <html color-scheme="dark"> (temas dark-theme y hc-dark). */
+
+.mcpchat {
+	--mcpchat-accent: #0275b8;
+	--mcpchat-accent-text: #ffffff;
+	--mcpchat-bg: #ffffff;
+	--mcpchat-bg-soft: #f4f6f8;
+	--mcpchat-text: #1f2c33;
+	--mcpchat-muted: #65737e;
+	--mcpchat-border: #dfe4e7;
+	--mcpchat-user-bg: #e5f1fa;
+	--mcpchat-error-bg: #fdecea;
+	--mcpchat-error-text: #a8231b;
+	--mcpchat-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 10000;
+	font-family: inherit;
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--mcpchat-text);
+}
+
+html[color-scheme="dark"] .mcpchat {
+	--mcpchat-accent: #4796c4;
+	--mcpchat-bg: #2b2b2b;
+	--mcpchat-bg-soft: #383838;
+	--mcpchat-text: #f2f2f2;
+	--mcpchat-muted: #a8a8a8;
+	--mcpchat-border: #4f4f4f;
+	--mcpchat-user-bg: #31475a;
+	--mcpchat-error-bg: #4a2422;
+	--mcpchat-error-text: #ffb4ab;
+	--mcpchat-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+.mcpchat svg {
+	width: 18px;
+	height: 18px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.mcpchat-bubble {
+	width: 52px;
+	height: 52px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--mcpchat-accent);
+	color: var(--mcpchat-accent-text);
+	box-shadow: var(--mcpchat-shadow);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: transform 0.15s ease;
+}
+
+.mcpchat-bubble svg {
+	width: 24px;
+	height: 24px;
+}
+
+.mcpchat-bubble:hover,
+.mcpchat-bubble:focus-visible {
+	transform: scale(1.07);
+	outline: none;
+}
+
+.mcpchat-bubble-active {
+	transform: scale(0.92);
+}
+
+.mcpchat-panel {
+	position: absolute;
+	right: 0;
+	bottom: 64px;
+	width: 400px;
+	height: 560px;
+	max-width: calc(100vw - 40px);
+	max-height: calc(100vh - 110px);
+	display: flex;
+	flex-direction: column;
+	background: var(--mcpchat-bg);
+	border: 1px solid var(--mcpchat-border);
+	border-radius: 10px;
+	box-shadow: var(--mcpchat-shadow);
+	overflow: hidden;
+}
+
+.mcpchat-panel[hidden] {
+	display: none;
+}
+
+.mcpchat-header {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 10px 10px 10px 14px;
+	background: var(--mcpchat-accent);
+	color: var(--mcpchat-accent-text);
+}
+
+.mcpchat-title {
+	flex: 1;
+	font-size: 13px;
+	font-weight: bold;
+}
+
+.mcpchat-icon-btn {
+	border: 0;
+	background: transparent;
+	color: inherit;
+	padding: 4px;
+	border-radius: 4px;
+	cursor: pointer;
+	display: flex;
+}
+
+.mcpchat-icon-btn:hover,
+.mcpchat-icon-btn:focus-visible {
+	background: rgba(255, 255, 255, 0.2);
+	outline: none;
+}
+
+.mcpchat-icon-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.mcpchat-messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	background: var(--mcpchat-bg-soft);
+}
+
+.mcpchat-msg {
+	max-width: 88%;
+	padding: 8px 11px;
+	border-radius: 8px;
+	word-wrap: break-word;
+	overflow-wrap: anywhere;
+}
+
+.mcpchat-user {
+	align-self: flex-end;
+	background: var(--mcpchat-user-bg);
+	white-space: pre-wrap;
+}
+
+.mcpchat-assistant {
+	align-self: flex-start;
+	background: var(--mcpchat-bg);
+	border: 1px solid var(--mcpchat-border);
+}
+
+.mcpchat-info {
+	align-self: center;
+	color: var(--mcpchat-muted);
+	text-align: center;
+}
+
+.mcpchat-error {
+	align-self: stretch;
+	max-width: none;
+	background: var(--mcpchat-error-bg);
+	color: var(--mcpchat-error-text);
+}
+
+.mcpchat-assistant p {
+	margin: 0 0 6px;
+}
+
+.mcpchat-assistant p:last-child {
+	margin-bottom: 0;
+}
+
+.mcpchat-assistant .mcpchat-h {
+	font-weight: bold;
+}
+
+.mcpchat-assistant ul,
+.mcpchat-assistant ol {
+	margin: 0 0 6px;
+	padding-left: 18px;
+}
+
+.mcpchat-assistant code {
+	font-family: monospace;
+	background: var(--mcpchat-bg-soft);
+	padding: 0 3px;
+	border-radius: 3px;
+}
+
+.mcpchat-assistant pre {
+	margin: 0 0 6px;
+	padding: 8px;
+	background: var(--mcpchat-bg-soft);
+	border-radius: 4px;
+	overflow-x: auto;
+}
+
+.mcpchat-assistant pre code {
+	padding: 0;
+}
+
+.mcpchat-table {
+	overflow-x: auto;
+	margin: 0 0 6px;
+}
+
+.mcpchat-table table {
+	border-collapse: collapse;
+	font-size: 11px;
+}
+
+.mcpchat-table th,
+.mcpchat-table td {
+	border: 1px solid var(--mcpchat-border);
+	padding: 3px 6px;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.mcpchat-table th {
+	background: var(--mcpchat-bg-soft);
+}
+
+.mcpchat-tools {
+	margin-top: 6px;
+	padding-top: 5px;
+	border-top: 1px dashed var(--mcpchat-border);
+	color: var(--mcpchat-muted);
+	font-size: 11px;
+}
+
+.mcpchat-typing span {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin: 0 2px;
+	border-radius: 50%;
+	background: var(--mcpchat-muted);
+	animation: mcpchat-blink 1.2s infinite ease-in-out;
+}
+
+.mcpchat-typing span:nth-child(2) {
+	animation-delay: 0.2s;
+}
+
+.mcpchat-typing span:nth-child(3) {
+	animation-delay: 0.4s;
+}
+
+@keyframes mcpchat-blink {
+	0%, 80%, 100% { opacity: 0.25; }
+	40% { opacity: 1; }
+}
+
+.mcpchat-form {
+	display: flex;
+	gap: 8px;
+	align-items: flex-end;
+	padding: 10px;
+	border-top: 1px solid var(--mcpchat-border);
+	background: var(--mcpchat-bg);
+	margin: 0;
+}
+
+.mcpchat-input {
+	flex: 1;
+	resize: none;
+	min-height: 36px;
+	max-height: 120px;
+	padding: 7px 9px;
+	border: 1px solid var(--mcpchat-border);
+	border-radius: 6px;
+	background: var(--mcpchat-bg);
+	color: var(--mcpchat-text);
+	font: inherit;
+	box-sizing: border-box;
+}
+
+.mcpchat-input:focus {
+	outline: none;
+	border-color: var(--mcpchat-accent);
+}
+
+.mcpchat-send {
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	border: 0;
+	border-radius: 6px;
+	background: var(--mcpchat-accent);
+	color: var(--mcpchat-accent-text);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.mcpchat-send:disabled,
+.mcpchat-input:disabled {
+	opacity: 0.6;
+	cursor: default;
+}

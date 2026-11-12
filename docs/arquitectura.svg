@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="950" viewBox="0 0 1400 950" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Arquitectura técnica: chat MCP para Zabbix 7.0</title>
+  <defs>
+    <marker id="aCred" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d9822b"/>
+    </marker>
+    <marker id="aData" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5568"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="950" fill="#ffffff"/>
+
+  <!-- Título y leyenda -->
+  <text x="40" y="48" font-size="24" font-weight="700" fill="#1f2c33">Arquitectura técnica · Chat MCP para Zabbix 7.0</text>
+  <text x="40" y="74" font-size="14" fill="#5b6770">Recorrido de una pregunta desde el globo de chat hasta la API de Zabbix, con los permisos del usuario conectado</text>
+  <g font-size="12" fill="#1f2c33">
+    <line x1="1000" y1="34" x2="1040" y2="34" stroke="#d9822b" stroke-width="3" marker-end="url(#aCred)"/>
+    <text x="1050" y="38">Lleva la credencial del usuario</text>
+    <line x1="1000" y1="56" x2="1040" y2="56" stroke="#4a5568" stroke-width="2" marker-end="url(#aData)"/>
+    <text x="1050" y="60">Sin credencial de usuario</text>
+    <line x1="1000" y1="78" x2="1040" y2="78" stroke="#4a5568" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#aData)"/>
+    <text x="1050" y="82">Alternativa: cliente en consola</text>
+  </g>
+
+  <!-- Zona A: Docker stack de Zabbix -->
+  <rect x="280" y="105" width="350" height="640" rx="10" fill="#f5f7fa" stroke="#8a97a3" stroke-dasharray="7 5"/>
+  <text x="295" y="127" font-size="12" font-weight="700" fill="#5b6770">DOCKER · stack mcpchat-test</text>
+
+  <rect x="300" y="140" width="310" height="440" rx="8" fill="#eef4fb" stroke="#4a7fb5" stroke-width="1.5"/>
+  <text x="315" y="162" font-size="12" font-weight="700" fill="#2f5f8f">zabbix-web-nginx-pgsql 7.0 · 127.0.0.1:8088</text>
+
+  <rect x="315" y="178" width="280" height="172" rx="6" fill="#ffffff" stroke="#4a7fb5"/>
+  <text x="330" y="201" font-size="15" font-weight="700" fill="#1f2c33">Módulo mcpchat (PHP)</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="330" y="224">zabbix.php?action=mcpchat.status | send | reset</text>
+    <text x="330" y="246">• Valida sesión, CSRF y min_user_type</text>
+    <text x="330" y="267">• Toma la sesión: CWebUser::$data['sessionid']</text>
+    <text x="330" y="288">• Config: gateway_url, gateway_api_key,</text>
+    <text x="330" y="305">   delegate_user_session</text>
+  </g>
+  <text x="330" y="333" font-size="11" fill="#6b7780">assets mcpchat.js / mcpchat.css en todas las páginas</text>
+
+  <rect x="315" y="410" width="280" height="152" rx="6" fill="#ffffff" stroke="#4a7fb5"/>
+  <text x="330" y="433" font-size="15" font-weight="700" fill="#1f2c33">API JSON-RPC</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="330" y="456">/api_jsonrpc.php</text>
+    <text x="330" y="477">Authorization: Bearer &lt;sesión del usuario&gt;</text>
+    <text x="330" y="498">Aplica sus grupos de hosts, rol,</text>
+    <text x="330" y="515">acceso a la API y solo lectura</text>
+    <text x="330" y="540" fill="#2f5f8f">→ auditoría con el usuario real</text>
+  </g>
+
+  <rect x="300" y="600" width="150" height="125" rx="8" fill="#ffffff" stroke="#8a97a3"/>
+  <text x="315" y="624" font-size="14" font-weight="700" fill="#1f2c33">zabbix-server</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="315" y="646">pgsql 7.0.32</text>
+    <text x="315" y="666">:10051</text>
+    <text x="315" y="686" fill="#6b7780">recolección,</text>
+    <text x="315" y="703" fill="#6b7780">triggers, alertas</text>
+  </g>
+
+  <rect x="460" y="600" width="150" height="125" rx="8" fill="#ffffff" stroke="#8a97a3"/>
+  <text x="475" y="624" font-size="14" font-weight="700" fill="#1f2c33">PostgreSQL 16</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="475" y="646">base de datos</text>
+    <text x="475" y="666">de Zabbix</text>
+    <text x="475" y="686" fill="#6b7780">sesiones, permisos,</text>
+    <text x="475" y="703" fill="#6b7780">hosts, histórico</text>
+  </g>
+
+  <!-- Navegador -->
+  <rect x="30" y="160" width="222" height="185" rx="8" fill="#ffffff" stroke="#55606a" stroke-width="1.5"/>
+  <text x="45" y="184" font-size="15" font-weight="700" fill="#1f2c33">Navegador</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="45" y="207">Usuario de Zabbix con sesión</text>
+    <text x="45" y="230">Globo de chat (mcpchat.js)</text>
+    <text x="45" y="252">• Markdown escapado, sin HTML</text>
+    <text x="45" y="273">• Historial visible en</text>
+    <text x="45" y="290">   sessionStorage</text>
+    <text x="45" y="313" fill="#6b7780">Solo habla con su Zabbix:</text>
+    <text x="45" y="330" fill="#6b7780">nunca ve claves ni la pasarela</text>
+  </g>
+
+  <!-- Zona B: host Windows -->
+  <rect x="670" y="105" width="380" height="290" rx="10" fill="#f6faf6" stroke="#8a97a3" stroke-dasharray="7 5"/>
+  <text x="685" y="127" font-size="12" font-weight="700" fill="#5b6770">HOST WINDOWS · mcp-client (.venv)</text>
+
+  <rect x="690" y="140" width="340" height="238" rx="8" fill="#ffffff" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="705" y="164" font-size="15" font-weight="700" fill="#1f2c33">pasarela.py · 127.0.0.1:8770</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="705" y="187">Starlette / uvicorn · Bearer GATEWAY_API_KEY</text>
+    <text x="705" y="207">POST /chat · POST /reset · GET /health</text>
+    <text x="705" y="234" font-size="13" font-weight="700">cliente.py · ZabbixChat (LangChain)</text>
+    <text x="705" y="256">• Una conversación por usuario (caduca)</text>
+    <text x="705" y="276">• Filtra y recorta herramientas (TOOLS_ALLOW)</text>
+    <text x="705" y="296">• Bucle LLM → herramienta → LLM</text>
+    <text x="705" y="316">• Credencial solo en el _meta del MCP</text>
+  </g>
+  <text x="705" y="343" font-size="11" fill="#6b7780">logs/llm_requests.jsonl · logs/cliente.log</text>
+  <text x="705" y="360" font-size="11" fill="#6b7780">(contexto y tokens; nunca credenciales)</text>
+
+  <!-- LLM -->
+  <rect x="1110" y="140" width="260" height="200" rx="8" fill="#fdf5ea" stroke="#c77d1a" stroke-width="1.5"/>
+  <text x="1125" y="164" font-size="15" font-weight="700" fill="#1f2c33">Proveedor LLM</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="1125" y="187">init_chat_model (LangChain)</text>
+    <text x="1125" y="209">Anthropic · OpenAI · Ollama</text>
+    <text x="1125" y="229">Gemini · Azure · Mistral…</text>
+    <text x="1125" y="255">Recibe: system prompt, historial</text>
+    <text x="1125" y="275">y esquemas de herramientas</text>
+    <text x="1125" y="295">Devuelve: tool_calls o respuesta</text>
+    <text x="1125" y="322" font-weight="700" fill="#b23b2a">Nunca recibe credenciales</text>
+  </g>
+
+  <!-- Zona C: Docker del MCP -->
+  <rect x="670" y="430" width="380" height="315" rx="10" fill="#f9f6fc" stroke="#8a97a3" stroke-dasharray="7 5"/>
+  <text x="685" y="452" font-size="12" font-weight="700" fill="#5b6770">DOCKER · zabbix-mcp-server · 127.0.0.1:8080</text>
+
+  <rect x="690" y="465" width="340" height="262" rx="8" fill="#ffffff" stroke="#7b4fb0" stroke-width="1.5"/>
+  <text x="705" y="489" font-size="15" font-weight="700" fill="#1f2c33">Servidor MCP (fork de initMAX 1.42.2)</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="705" y="512">Streamable HTTP /mcp · Bearer MCP_TOKEN</text>
+    <text x="705" y="532" font-weight="700" fill="#7b4fb0">delegated_auth = "required"</text>
+    <text x="705" y="557">ZabbixMCPServer.call_tool</text>
+    <text x="705" y="575">   → lee _meta["zabbix-mcp/delegated-auth"]</text>
+    <text x="705" y="598">ClientManager.call → _call_delegated</text>
+    <text x="705" y="616">   → call_with_session(sesión del usuario)</text>
+    <text x="705" y="641" font-weight="700" fill="#b23b2a">Sin vuelta atrás al api_token de servicio</text>
+    <text x="705" y="663" fill="#6b7780">Sin credencial → llamada rechazada</text>
+    <text x="705" y="683" fill="#6b7780">api_token: solo versión, zona horaria</text>
+    <text x="705" y="700" fill="#6b7780">y health_check</text>
+  </g>
+
+  <!-- Cliente en consola -->
+  <rect x="1110" y="480" width="260" height="148" rx="8" fill="#ffffff" stroke="#8a97a3" stroke-dasharray="6 4"/>
+  <text x="1125" y="504" font-size="15" font-weight="700" fill="#1f2c33">cliente.py (consola)</text>
+  <g font-size="12" fill="#1f2c33">
+    <text x="1125" y="527">python cliente.py -p "…"</text>
+    <text x="1125" y="549">ZABBIX_USER_TOKEN =</text>
+    <text x="1125" y="567">token de API personal</text>
+    <text x="1125" y="595" fill="#6b7780">Mismo LangChain, logging</text>
+    <text x="1125" y="610" fill="#6b7780">y reducción de tokens</text>
+  </g>
+
+  <!-- Flechas -->
+  <!-- 1 Navegador -> módulo -->
+  <line x1="252" y1="250" x2="312" y2="250" stroke="#d9822b" stroke-width="3" marker-end="url(#aCred)"/>
+  <!-- 2 módulo -> pasarela -->
+  <line x1="595" y1="222" x2="687" y2="222" stroke="#d9822b" stroke-width="3" marker-end="url(#aCred)"/>
+  <!-- 3 pasarela <-> LLM -->
+  <line x1="1030" y1="205" x2="1107" y2="205" stroke="#4a5568" stroke-width="2" marker-end="url(#aData)"/>
+  <line x1="1110" y1="245" x2="1033" y2="245" stroke="#4a5568" stroke-width="2" marker-end="url(#aData)"/>
+  <!-- 4 pasarela -> MCP -->
+  <line x1="985" y1="378" x2="985" y2="462" stroke="#d9822b" stroke-width="3" marker-end="url(#aCred)"/>
+  <!-- 5 MCP -> API -->
+  <path d="M690,600 H648 V486 H598" fill="none" stroke="#d9822b" stroke-width="3" marker-end="url(#aCred)"/>
+  <!-- 6 API -> BD -->
+  <line x1="535" y1="562" x2="535" y2="597" stroke="#4a5568" stroke-width="2" marker-end="url(#aData)"/>
+  <!-- B consola -> MCP -->
+  <line x1="1110" y1="548" x2="1033" y2="548" stroke="#4a5568" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#aData)"/>
+
+  <!-- Insignias numeradas -->
+  <g font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">
+    <circle cx="282" cy="250" r="11" fill="#d9822b"/><text x="282" y="254">1</text>
+    <circle cx="641" cy="222" r="11" fill="#d9822b"/><text x="641" y="226">2</text>
+    <circle cx="1070" cy="225" r="11" fill="#4a5568"/><text x="1070" y="229">3</text>
+    <circle cx="985" cy="412" r="11" fill="#d9822b"/><text x="985" y="416">4</text>
+    <circle cx="648" cy="545" r="11" fill="#d9822b"/><text x="648" y="549">5</text>
+    <circle cx="560" cy="580" r="11" fill="#4a5568"/><text x="560" y="584">6</text>
+    <circle cx="1072" cy="548" r="11" fill="#4a5568"/><text x="1072" y="552">B</text>
+  </g>
+
+  <!-- Recorrido -->
+  <rect x="30" y="768" width="1340" height="165" rx="10" fill="#f8f9fb" stroke="#dfe4e7"/>
+  <text x="50" y="795" font-size="15" font-weight="700" fill="#1f2c33">Recorrido de una pregunta (las respuestas vuelven por el mismo camino)</text>
+  <g font-size="12.5" fill="#1f2c33">
+    <text x="50" y="822"><tspan font-weight="700" fill="#d9822b">1</tspan>  Navegador → módulo: fetch a zabbix.php?action=mcpchat.send con la cookie zbx_session y el _csrf_token</text>
+    <text x="50" y="846"><tspan font-weight="700" fill="#d9822b">2</tspan>  Módulo → pasarela: POST /chat {conversation, user, message, zabbix_auth = sesión}</text>
+    <text x="68" y="863">Bearer GATEWAY_API_KEY · servidor a servidor vía host.docker.internal:8770</text>
+    <text x="50" y="887"><tspan font-weight="700" fill="#4a5568">3</tspan>  Pasarela ↔ LLM: mensajes + herramientas; el LLM decide qué herramienta llamar o responde</text>
+    <text x="50" y="911"><tspan font-weight="700" fill="#4a5568">B</tspan>  Alternativa en consola: cliente.py envía el token personal ZABBIX_USER_TOKEN por el mismo camino (4)</text>
+
+    <text x="720" y="822"><tspan font-weight="700" fill="#d9822b">4</tspan>  Pasarela → MCP: tools/call con _meta["zabbix-mcp/delegated-auth"]</text>
+    <text x="738" y="839">Bearer MCP_TOKEN · http://127.0.0.1:8080/mcp</text>
+    <text x="720" y="863"><tspan font-weight="700" fill="#d9822b">5</tspan>  MCP → API de Zabbix: Authorization: Bearer &lt;sesión&gt; vía host.docker.internal:8088</text>
+    <text x="720" y="887"><tspan font-weight="700" fill="#4a5568">6</tspan>  API → base de datos: Zabbix filtra el resultado según los permisos del usuario</text>
+    <text x="720" y="911" font-weight="700" fill="#b23b2a">La credencial recorre 2 → 4 → 5 y nunca llega al LLM (3)</text>
+  </g>
+</svg>

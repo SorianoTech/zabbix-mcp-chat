@@ -1,0 +1,13 @@
+mcp>=2.0
+python-dotenv>=1.0
+# LLM agnóstico: LangChain + el paquete del proveedor que uses
+langchain>=1.0
+langchain-openai>=1.0        # OpenAI y cualquier endpoint compatible (vLLM, LM Studio, LiteLLM, Groq...)
+langchain-anthropic        # LLM_PROVIDER=anthropic
+# langchain-ollama           # LLM_PROVIDER=ollama
+# langchain-google-genai     # LLM_PROVIDER=google_genai
+# langchain-mistralai        # LLM_PROVIDER=mistralai
+# langchain-aws              # LLM_PROVIDER=bedrock_converse
+# pasarela.py (ya vienen como dependencias de mcp)
+starlette
+uvicorn
