@@ -1,0 +1,38 @@
+# Servicio systemd de la pasarela del chat (pasarela.py) para el módulo de Zabbix.
+#
+# Instalación (ver README.md, sección "Pasarela como servicio en Linux"):
+#   sudo cp mcp-pasarela.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mcp-pasarela
+#
+# Ajusta User y las rutas si no instalas en /opt/mcp-chat/mcp-client.
+
+[Unit]
+Description=Pasarela del chat MCP para Zabbix (pasarela.py)
+After=network-online.target
+Wants=network-online.target
+# Si el servidor MCP corre en esta máquina como servicio, descomenta y ajusta su nombre:
+#After=network-online.target zabbix-mcp.service
+#Wants=network-online.target zabbix-mcp.service
+
+[Service]
+Type=simple
+User=mcpchat
+Group=mcpchat
+# Importante: los logs (LOG_DIR=logs) son relativos a este directorio.
+# El .env se lee siempre de la carpeta de pasarela.py.
+WorkingDirectory=/opt/mcp-chat/mcp-client
+ExecStart=/opt/mcp-chat/mcp-client/.venv/bin/python pasarela.py
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
+
+# Endurecimiento: solo puede escribir en su carpeta de logs.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mcp-chat/mcp-client/logs
+
+[Install]
+WantedBy=multi-user.target

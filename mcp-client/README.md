@@ -42,6 +42,7 @@ de hosts, su rol y sus restricciones de API.
 | `analizar_contexto.py` | Analiza `logs/llm_requests.jsonl`: tamaño de cada parte y contexto completo de cada petición. |
 | `pasarela.py` | API HTTP (`/chat`, `/reset`, `/health`) para el globo de chat de Zabbix ([../zabbix-module-mcpchat](../zabbix-module-mcpchat)). Usa el mismo `.env` (variables `GATEWAY_*`) y una conversación por usuario de Zabbix. |
 | `.env.example` | Toda la configuración (LLM, MCP, reducción de tokens, logging). |
+| `mcp-pasarela.service` | Unidad systemd para dejar `pasarela.py` como servicio en Linux (ver [Pasarela como servicio en Linux](#pasarela-como-servicio-en-linux)). |
 
 ## Instalación
 
@@ -69,6 +70,55 @@ python analizar_contexto.py                        # resumen de todas las petici
 python analizar_contexto.py --sesion ULTIMA        # solo la última sesión
 python analizar_contexto.py --ver 2                # contexto COMPLETO de la petición nº 2 (última sesión)
 ```
+
+## Pasarela como servicio en Linux
+
+Para el módulo de chat de Zabbix, `pasarela.py` debe estar siempre arrancada en una máquina que el
+**servidor web del frontend** alcance por HTTP (`gateway_url` del módulo). Con systemd arranca al
+encender y se reinicia si se cae. Ejemplo instalando en `/opt/mcp-chat/mcp-client`:
+
+```bash
+# 1. Copiar e instalar dependencias
+sudo mkdir -p /opt/mcp-chat
+sudo cp -r mcp-client /opt/mcp-chat/
+cd /opt/mcp-chat/mcp-client
+sudo python3 -m venv .venv
+sudo .venv/bin/pip install -r requirements.txt
+sudo cp .env.example .env && sudo nano .env   # LLM_*, MCP_URL, MCP_TOKEN, GATEWAY_API_KEY...
+sudo mkdir -p logs                            # debe existir: el servicio solo puede escribir ahí
+
+# 2. Usuario sin privilegios y permisos
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin mcpchat
+sudo chown -R mcpchat: /opt/mcp-chat/mcp-client
+sudo chmod 600 .env                           # contiene claves
+
+# 3. Probar a mano (Ctrl+C para salir) y comprobar desde otra terminal
+sudo -u mcpchat .venv/bin/python pasarela.py
+curl http://127.0.0.1:8770/health
+
+# 4. Instalar el servicio
+sudo cp mcp-pasarela.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mcp-pasarela
+```
+
+Operación habitual:
+
+```bash
+systemctl status mcp-pasarela
+sudo systemctl restart mcp-pasarela   # tras cambiar el .env
+journalctl -u mcp-pasarela -f         # salida del servicio; el detalle está en logs/cliente.log
+```
+
+Notas:
+
+- Si instalas en otra ruta o con otro usuario, ajusta `User`, `Group`, `WorkingDirectory`, `ExecStart`
+  y `ReadWritePaths` en [mcp-pasarela.service](mcp-pasarela.service). `WorkingDirectory` importa: los
+  logs (`LOG_DIR=logs`) son relativos a él. Si cambias `LOG_DIR`, cambia también `ReadWritePaths`.
+- Con `MCP_TRANSPORT=http` el servidor MCP debe estar arrancado aparte (en `MCP_URL`). Si corre en la
+  misma máquina como servicio, descomenta las líneas `After=`/`Wants=` de la unidad.
+- Si el frontend está en otra máquina: `GATEWAY_HOST=0.0.0.0` en el `.env` y cortafuegos que solo deje
+  entrar al puerto `GATEWAY_PORT` desde la IP del frontend.
 
 ## Logging
 
