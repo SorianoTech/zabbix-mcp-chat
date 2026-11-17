@@ -9,6 +9,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import sys
 from pathlib import Path
@@ -94,6 +95,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    if hasattr(sys.stdout, "reconfigure"):
+    if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8")
     main()

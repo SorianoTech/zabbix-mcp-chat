@@ -28,7 +28,6 @@ import hmac
 import logging
 import os
 import re
-import sys
 import time
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
@@ -36,6 +35,7 @@ from datetime import datetime
 from typing import Any
 
 import uvicorn
+from mcp import ClientSession
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -85,15 +85,16 @@ class Gateway:
         self.s = settings
         self.gw = gw
         self.store = store   # observabilidad (None = desactivada)
-        self.session = None
+        self.session: ClientSession | None = None
         self.tools: list[dict] = []
         self.instructions: str | None = None
         self.llm = cliente.build_chat_model(settings)   # un modelo compartido por todas las conversaciones
         self.conversations: dict[str, Conversation] = {}
 
     async def start(self, stack: AsyncExitStack) -> None:
-        self.session, self.instructions = await cliente.connect_mcp(stack, self.s)
-        mcp_tools = await cliente.list_all_tools(self.session)
+        session, self.instructions = await cliente.connect_mcp(stack, self.s)
+        self.session = session
+        mcp_tools = await cliente.list_all_tools(session)
         self.tools = cliente.select_tools(mcp_tools, self.s)
         log.info("Pasarela lista: %d herramientas enviadas al LLM (~%d tokens) de %d disponibles",
                  len(self.tools), cliente.est_tokens(self.tools) if self.tools else 0, len(mcp_tools))
@@ -113,6 +114,8 @@ class Gateway:
                 oldest = min(self.conversations, key=lambda c: self.conversations[c].last_used)
                 del self.conversations[oldest]
             label = f"{re.sub(r'[^A-Za-z0-9_.-]', '_', user)[:40]}-{conversation_id[:8]}"
+            if self.session is None:
+                raise RuntimeError("La pasarela aún no está conectada al servidor MCP")
             chat = cliente.ZabbixChat(self.s, self.session, self.tools, self.instructions,
                                       llm=self.llm, session_label=label)
             conv = self.conversations[conversation_id] = Conversation(chat)
@@ -250,7 +253,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+    cliente.use_utf8_console()
     main()

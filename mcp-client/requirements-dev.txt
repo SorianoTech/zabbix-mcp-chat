@@ -1,0 +1,6 @@
+# Desarrollo: comprobación de tipos (pip install -r requirements-dev.txt)
+#   ty check *.py tests
+#   mypy *.py tests
+ty
+mypy
+pandas-stubs

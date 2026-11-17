@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import copy
 import fnmatch
+import io
 import json
 import logging
 import os
@@ -27,13 +28,13 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final, cast
 
 from dotenv import load_dotenv
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
-from mcp.types import PaginatedRequestParams
+from mcp.types import PaginatedRequestParams, RequestParamsMeta
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
@@ -45,7 +46,7 @@ log = logging.getLogger("cliente")
 
 # Clave de _meta con la que el servidor MCP (fork) recibe la credencial del usuario de
 # Zabbix en cuyo nombre se hace la llamada. Ver zabbix-mcp-server/src/zabbix_mcp/delegation.py
-DELEGATED_AUTH_META_KEY = "zabbix-mcp/delegated-auth"
+DELEGATED_AUTH_META_KEY: Final = "zabbix-mcp/delegated-auth"
 
 SYSTEM_PROMPT = (
     "Eres un asistente de operaciones que consulta Zabbix mediante herramientas. "
@@ -101,6 +102,7 @@ class Settings:
     def from_env(cls) -> "Settings":
         load_dotenv(BASE_DIR / ".env")
         max_tokens = os.getenv("LLM_MAX_TOKENS", "").strip()
+        temperature = os.getenv("LLM_TEMPERATURE", "").strip()
         log_dir = Path(os.getenv("LOG_DIR", "logs"))
         llm_kwargs_raw = os.getenv("LLM_KWARGS", "").strip()
         try:
@@ -114,10 +116,10 @@ class Settings:
             model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
             # LLM_BASE_URL / LLM_API_KEY; se aceptan los nombres antiguos OPENAI_* por compatibilidad.
             # Vacíos = cada proveedor usa sus variables propias (ANTHROPIC_API_KEY, OLLAMA_HOST...).
-            base_url=os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL", ""),
-            api_key=os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY", ""),
+            base_url=os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "",
+            api_key=os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "",
             # Vacía = no se envía: algunos modelos (p. ej. claude-sonnet-5-5) rechazan valores no por defecto.
-            temperature=float(os.getenv("LLM_TEMPERATURE")) if os.getenv("LLM_TEMPERATURE", "").strip() else None,
+            temperature=float(temperature) if temperature else None,
             max_tokens=int(max_tokens) if max_tokens else None,
             llm_kwargs=llm_kwargs,
             zabbix_user_token=os.getenv("ZABBIX_USER_TOKEN", "").strip(),
@@ -423,7 +425,7 @@ class ZabbixChat:
         message = await self.llm.ainvoke(messages)
         elapsed = time.perf_counter() - started
 
-        usage = message.usage_metadata or {}
+        usage: dict[str, Any] = dict(message.usage_metadata or {})
         usage_log: dict[str, Any] = {}
         cached = (usage.get("input_token_details") or {}).get("cache_read", 0) or 0
         self.last_turn_events.append({
@@ -463,7 +465,8 @@ class ZabbixChat:
         ts = datetime.now().isoformat()
         started = time.perf_counter()
         try:
-            meta = {DELEGATED_AUTH_META_KEY: zabbix_auth} if zabbix_auth else None
+            # _meta es un mapa abierto (TypedDict con extra_items, que mypy aún no admite).
+            meta = cast(RequestParamsMeta, {DELEGATED_AUTH_META_KEY: zabbix_auth}) if zabbix_auth else None
             result = await self.session.call_tool(name, args, meta=meta)
             text = tool_result_text(result)
             is_error = bool(getattr(result, "is_error", False))
@@ -550,7 +553,8 @@ async def connect_mcp(stack: AsyncExitStack, settings: Settings) -> tuple[Client
 
 
 async def list_all_tools(session: ClientSession) -> list[Any]:
-    tools, cursor = [], None
+    tools: list[Any] = []
+    cursor: str | None = None
     while True:
         params = PaginatedRequestParams(cursor=cursor) if cursor else None
         page = await session.list_tools(params=params)
@@ -636,10 +640,15 @@ async def main() -> None:
         log.info(chat.usage_summary())
 
 
+def use_utf8_console() -> None:
+    """Consola en UTF-8 (en Windows la consola por defecto no lo es)."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
+
+
 if __name__ == "__main__":
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+    use_utf8_console()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

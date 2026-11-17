@@ -16,7 +16,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -89,7 +90,7 @@ class EventStoreTest(TempDirTest):
             {"kind": "tool", "name": "host_get", "args": {"limit": 1}, "ts": old, "elapsed_s": 0.1,
              "result_chars": 500, "truncated": True, "is_error": False, "result": "y" * 500},
         ]
-        common = dict(conversation="c1", user="Admin", delegated=True, elapsed_s=1.0, question="¿hosts?",
+        common: dict[str, Any] = dict(conversation="c1", user="Admin", delegated=True, elapsed_s=1.0, question="¿hosts?",
                       answer="1", status="ok", error=None, provider="p", model="m",
                       usage={"prompt_tokens": 100, "completion_tokens": 5, "cached_tokens": 0}, events=events)
         store.record_turn(ts_start=old, ts_end=old, **common)
@@ -112,7 +113,8 @@ class EventStoreTest(TempDirTest):
 class ChatEventsTest(TempDirTest):
     def test_events_of_a_turn(self) -> None:
         session = FakeSession(error=True)
-        chat = cliente.ZabbixChat(make_settings(self.tmp), session, [], None, llm=FakeLLM())
+        chat = cliente.ZabbixChat(make_settings(self.tmp), cast(Any, session), [], None,
+                                  llm=cast(Any, FakeLLM()))
         answer = asyncio.run(chat.ask("¿hosts?", zabbix_auth=SECRET))
         self.assertEqual(answer, "Hay 1 host.")
         self.assertEqual(chat.last_status, "ok")
@@ -133,13 +135,9 @@ class GatewayRecordTest(TempDirTest):
         gw = pasarela.GatewaySettings(host="127.0.0.1", port=0, api_key="", idle_minutes=60,
                                       max_conversations=10, max_message_chars=1000)
         store = observabilidad.EventStore(self.tmp / "o.db")
-        original = cliente.build_chat_model
-        cliente.build_chat_model = lambda s: llm
-        try:
+        with mock.patch.object(cliente, "build_chat_model", return_value=llm):
             gateway = pasarela.Gateway(settings, gw, store)
-        finally:
-            cliente.build_chat_model = original
-        gateway.session = FakeSession()
+        gateway.session = cast(Any, FakeSession())
         # Sin "with TestClient(...)" no se ejecuta el lifespan: no hay conexión MCP real.
         return TestClient(pasarela.build_app(gateway)), store
 

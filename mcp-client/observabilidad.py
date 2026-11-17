@@ -12,6 +12,7 @@ se hizo con ella (columna "delegated").
 from __future__ import annotations
 
 import contextlib
+import importlib
 import json
 import logging
 import os
@@ -21,7 +22,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterator
+from collections.abc import Generator
+from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parent
 log = logging.getLogger("observabilidad")
@@ -182,7 +184,9 @@ class EventStore:
                  answer, status, error, provider, model, len(llm),
                  usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
                  usage.get("cached_tokens", 0), len(tools)))
-            turn_id = int(cur.lastrowid)
+            if cur.lastrowid is None:   # no ocurre tras un INSERT, pero lastrowid es Optional
+                raise RuntimeError("SQLite no devolvió el id del turno insertado")
+            turn_id = cur.lastrowid
             self._conn.executemany(
                 "INSERT INTO llm_calls (turn_id, n, ts, elapsed_s, prompt_tokens, completion_tokens,"
                 " cached_tokens, est_total, est_tools, n_messages) VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -225,8 +229,9 @@ def setup_phoenix(obs: ObsSettings) -> bool:
     if not obs.phoenix_enabled:
         return False
     try:
-        from phoenix.otel import register
-        from openinference.instrumentation.langchain import LangChainInstrumentor
+        # Dependencias opcionales (requirements-phoenix.txt): pueden no estar instaladas.
+        register = importlib.import_module("phoenix.otel").register
+        LangChainInstrumentor = importlib.import_module("openinference.instrumentation.langchain").LangChainInstrumentor
     except ImportError as exc:
         log.warning("PHOENIX_ENABLED=true pero faltan paquetes (%s): pip install -r requirements-phoenix.txt",
                     exc)
@@ -240,11 +245,11 @@ def setup_phoenix(obs: ObsSettings) -> bool:
 
 
 @contextlib.contextmanager
-def trace_attributes(conversation: str, user: str) -> Iterator[None]:
+def trace_attributes(conversation: str, user: str) -> Generator[None, None, None]:
     """Etiqueta las trazas de Phoenix con la conversación (sesión) y el usuario de Zabbix."""
     if not _phoenix_active:
         yield
         return
-    from openinference.instrumentation import using_attributes
+    using_attributes = importlib.import_module("openinference.instrumentation").using_attributes
     with using_attributes(session_id=conversation, user_id=user):
         yield

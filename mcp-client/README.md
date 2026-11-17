@@ -150,6 +150,9 @@ pip install -r requirements.txt
 streamlit run panel.py                 # http://localhost:8501
 ```
 
+Tipos: `pip install -r requirements-dev.txt` y `ty check *.py tests`
+(o `mypy *.py tests`).
+
 | Pestaña | Qué muestra |
 |---|---|
 | En vivo | KPIs del periodo (preguntas, usuarios, tokens, % errores, latencia p50/p95) y las últimas preguntas. |
