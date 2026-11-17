@@ -25,7 +25,9 @@ Proyecto MCP/
 ├── mcp-client/               ← cliente Python: cualquier LLM vía LangChain + MCP (ver su README.md)
 │   ├── cliente.py            ← chat, filtrado/reducción de herramientas, logging del contexto
 │   ├── analizar_contexto.py  ← análisis de logs/llm_requests.jsonl
-│   └── pasarela.py           ← API HTTP que usa el módulo de chat de Zabbix
+│   ├── pasarela.py           ← API HTTP que usa el módulo de chat de Zabbix
+│   ├── observabilidad.py     ← registro de cada pregunta en SQLite + trazas Phoenix opcionales
+│   └── panel.py              ← panel Streamlit de observabilidad (streamlit run panel.py)
 ├── zabbix-module-mcpchat/    ← módulo de frontend Zabbix 7.0 (PHP+JS): globo de chat → pasarela
 └── zabbix-mcp-server/        ← repo git (origin = initMAX)
     ├── src/zabbix_mcp/       ← código del servidor
@@ -251,3 +253,4 @@ Mantén esta tabla al día: es la referencia para fusionar futuras versiones del
 | 2026-11-11 | Clonado del upstream v1.42.2 (commit `0cbb82c`) | — | Base del fork |
 | 2026-11-11 | Autenticación delegada: el chat consulta Zabbix con la sesión o el token del usuario final | Nuevo: `src/zabbix_mcp/delegation.py`, `tests/test_delegated_auth.py`. Upstream (enganches marcados `Fork:`): `config.py` (`ServerConfig.delegated_auth` + validación), `server.py` (import, `ZabbixMCPServer.call_tool` lee `_meta`, `run_server` fija el modo), `client.py` (`call()` → `_call_delegated()`), `api/extensions.py` (`graph_render` comprueba `graph.get` con la credencial del usuario), `config.example.toml` | Clave `_meta`: `zabbix-mcp/delegated-auth`. Modos `off`/`allowed`/`required`. Nunca se vuelve a la credencial de servicio. Probado en Zabbix 7.0.32. En Windows fallan 2+16 tests POSIX del upstream (igual sin el fork). |
 | 2026-11-11 | Cliente agnóstico al modelo | `mcp-client/` (no es upstream) | LangChain `init_chat_model` (`LLM_PROVIDER` + `LLM_MODEL`) en lugar del SDK de OpenAI. |
+| 2026-11-17 | Observabilidad de la pasarela: preguntas, tokens, herramientas y errores en tiempo real | `mcp-client/` (no es upstream): nuevos `observabilidad.py`, `panel.py`, `requirements-phoenix.txt`, `mcp-panel.service`, `tests/test_observabilidad.py`; cambios en `cliente.py` (`last_turn_events`, `last_status`), `pasarela.py`, `requirements.txt`, `.env.example`, `README.md` | SQLite (WAL) + Streamlit; Phoenix opcional (`PHOENIX_ENABLED`) solo con el instrumentador de LangChain. Guarda resultados de herramientas; nunca la credencial delegada. |

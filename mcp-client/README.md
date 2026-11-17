@@ -134,6 +134,45 @@ LangChain llama `input_tokens`), si el proveedor la devuelve. La representación
 contenido enviado, pero cada proveedor lo empaqueta a su manera, así que el número real puede variar.
 Los logs contienen datos de Zabbix y las preguntas: no los compartas sin revisarlos.
 
+## Observabilidad (panel en tiempo real y Phoenix)
+
+La pasarela registra cada pregunta en SQLite (`OBS_DB`, por defecto `logs/observabilidad.db`):
+usuario de Zabbix, conversación, pregunta, respuesta o error, tokens (entrada, salida, cacheados),
+cada llamada al LLM y cada llamada a herramienta con sus argumentos, duración, tamaño, si se recortó,
+si falló y su resultado (recortado a `OBS_TOOL_RESULT_MAX_CHARS`). La credencial de Zabbix del
+usuario **nunca** se guarda; solo si la pregunta se hizo con ella (columna «Credencial»).
+Los datos se purgan pasados `OBS_RETENTION_DAYS` días. Desactívalo con `OBS_ENABLED=false`.
+
+**Panel** (Streamlit, lee la BD en solo lectura y se refresca cada 5/15/60 s):
+
+```powershell
+pip install -r requirements.txt
+streamlit run panel.py                 # http://localhost:8501
+```
+
+| Pestaña | Qué muestra |
+|---|---|
+| En vivo | KPIs del periodo (preguntas, usuarios, tokens, % errores, latencia p50/p95) y las últimas preguntas. |
+| Consumo | Tokens y preguntas por hora/día, por usuario y por modelo; rondas LLM por pregunta; coste si defines `PANEL_PRICE_*`. |
+| Herramientas | Llamadas, % error, latencia, tamaño medio y % recortado por herramienta (para ajustar `TOOLS_ALLOW` y `TOOL_RESULT_MAX_CHARS`). |
+| Conversaciones | Búsqueda y detalle de cada pregunta: línea temporal LLM → herramienta con argumentos y resultados, y la respuesta. |
+| Errores | Preguntas fallidas o sin respuesta final y herramientas con error. |
+
+Streamlit no tiene usuarios: déjalo en `127.0.0.1` (o tras un proxy con autenticación) y define
+`PANEL_PASSWORD` si lo expones. En Linux: [mcp-panel.service](mcp-panel.service), igual que la pasarela.
+
+**Phoenix** (opcional, [Arize Phoenix](https://github.com/arize-ai/phoenix)): trazas OpenTelemetry de
+cada llamada al LLM (mensajes completos, herramientas, tokens), agrupadas por conversación (sesión) y
+usuario. Útil para depurar por qué el modelo eligió una herramienta; el panel sirve para el uso diario.
+
+```powershell
+pip install -r requirements-phoenix.txt      # en el entorno de la pasarela
+pip install arize-phoenix; phoenix serve     # o: docker run -p 6006:6006 arizephoenix/phoenix
+# .env: PHOENIX_ENABLED=true  PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:6006
+```
+
+Solo se instrumenta LangChain: el `_meta` de las llamadas MCP (donde va la credencial delegada) no se toca.
+
 ## Cómo reducir los tokens
 
 Medido con el servidor 1.42.2 (estimación ~4 caracteres/token, coste fijo de **cada** petición al LLM):

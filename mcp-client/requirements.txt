@@ -11,3 +11,5 @@ langchain-anthropic        # LLM_PROVIDER=anthropic
 # pasarela.py (ya vienen como dependencias de mcp)
 starlette
 uvicorn
+# panel.py (observabilidad)
+streamlit>=1.40

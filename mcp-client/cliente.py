@@ -364,6 +364,10 @@ class ZabbixChat:
         if session_label:  # agrupa en los logs las peticiones de un mismo usuario/conversación
             self.payloads.session_id = session_label
         self.last_tools_used: list[str] = []
+        # Eventos del último turno (llamadas al LLM y a herramientas) para la observabilidad de
+        # la pasarela. Nunca incluyen la credencial de Zabbix del usuario.
+        self.last_turn_events: list[dict[str, Any]] = []
+        self.last_status = "ok"   # "ok" | "max_rounds"
         system = SYSTEM_PROMPT
         if server_instructions and settings.include_server_instructions:
             system += "\n\nInstrucciones del servidor MCP:\n" + server_instructions
@@ -414,14 +418,21 @@ class ZabbixChat:
                  breakdown["n_tools"], breakdown["est_by_role"])
         log.debug("Desglose contexto #%d: %s", n, json.dumps(breakdown, ensure_ascii=False))
 
+        ts = datetime.now().isoformat()
         started = time.perf_counter()
         message = await self.llm.ainvoke(messages)
         elapsed = time.perf_counter() - started
 
         usage = message.usage_metadata or {}
         usage_log: dict[str, Any] = {}
+        cached = (usage.get("input_token_details") or {}).get("cache_read", 0) or 0
+        self.last_turn_events.append({
+            "kind": "llm", "n": n, "ts": ts, "elapsed_s": round(elapsed, 3),
+            "prompt_tokens": usage.get("input_tokens"), "completion_tokens": usage.get("output_tokens"),
+            "cached_tokens": cached, "est_total": breakdown["est_total"], "est_tools": breakdown["est_tools"],
+            "n_messages": breakdown["n_messages"],
+        })
         if usage:
-            cached = (usage.get("input_token_details") or {}).get("cache_read", 0) or 0
             self.totals["requests"] += 1
             self.totals["prompt_tokens"] += usage.get("input_tokens", 0) or 0
             self.totals["completion_tokens"] += usage.get("output_tokens", 0) or 0
@@ -449,20 +460,29 @@ class ZabbixChat:
         # ni entra en el contexto del LLM.
         log.info("⚙ MCP %s %s%s", name, json.dumps(args, ensure_ascii=False)[:300],
                  " [en nombre del usuario]" if zabbix_auth else "")
+        ts = datetime.now().isoformat()
         started = time.perf_counter()
         try:
             meta = {DELEGATED_AUTH_META_KEY: zabbix_auth} if zabbix_auth else None
             result = await self.session.call_tool(name, args, meta=meta)
             text = tool_result_text(result)
+            is_error = bool(getattr(result, "is_error", False))
         except Exception as exc:  # error de transporte o del servidor
             log.exception("Fallo llamando a la herramienta %s", name)
             text = f"ERROR llamando a {name}: {exc}"
+            is_error = True
+        elapsed = time.perf_counter() - started
         original = len(text)
         text = _truncate(text, self.s.tool_result_max_chars,
                          f"\n…[recortado: {original} caracteres en total; pide menos datos con filtros/limit]")
         log.info("  ↳ %d caracteres (~%d tok) en %.1fs%s", original, est_tokens(text),
-                 time.perf_counter() - started, " → recortado" if len(text) < original else "")
+                 elapsed, " → recortado" if len(text) < original else "")
         log.debug("  ↳ resultado %s: %s", name, text[:2000])
+        self.last_turn_events.append({
+            "kind": "tool", "name": name, "args": args, "ts": ts, "elapsed_s": round(elapsed, 3),
+            "result_chars": original, "truncated": len(text) < original, "is_error": is_error,
+            "result": text,
+        })
         return text
 
     async def ask(self, question: str, *, zabbix_auth: str | None = None) -> str:
@@ -470,6 +490,8 @@ class ZabbixChat:
         (sesión o token de API): las herramientas consultan Zabbix con sus permisos."""
         self.history.append(HumanMessage(question))
         self.last_tools_used = []
+        self.last_turn_events = []
+        self.last_status = "ok"
         for _ in range(self.s.max_tool_rounds):
             messages = [self.system_message, *self._trimmed_history()]
             message = await self._call_llm(messages)
@@ -487,6 +509,7 @@ class ZabbixChat:
                     f"ERROR: los argumentos no son JSON válido ({bad.get('error')}). Corrige la llamada.",
                     tool_call_id=bad.get("id") or "invalid"))
         log.warning("Se alcanzó MAX_TOOL_ROUNDS=%d sin respuesta final", self.s.max_tool_rounds)
+        self.last_status = "max_rounds"
         answer = "(Se alcanzó el máximo de llamadas a herramientas sin una respuesta final.)"
         self.history.append(AIMessage(answer))
         return answer

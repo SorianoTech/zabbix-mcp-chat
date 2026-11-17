@@ -16,6 +16,9 @@ Endpoints (todos exigen "Authorization: Bearer <GATEWAY_API_KEY>" si la clave es
 "zabbix_auth" es la credencial de Zabbix del usuario (su sesión del frontend). Se reenvía al
 servidor MCP en el _meta de cada llamada a herramienta para que Zabbix aplique SUS permisos.
 No se guarda (ni en memoria entre peticiones ni en los logs) y nunca llega al LLM.
+
+Cada pregunta se registra para la observabilidad (observabilidad.py → SQLite, panel.py) y,
+opcionalmente, en Phoenix (PHOENIX_ENABLED=true).
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ import sys
 import time
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import uvicorn
@@ -38,6 +42,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 import cliente
+import observabilidad
 
 log = logging.getLogger("pasarela")
 
@@ -75,9 +80,11 @@ class Conversation:
 
 
 class Gateway:
-    def __init__(self, settings: cliente.Settings, gw: GatewaySettings) -> None:
+    def __init__(self, settings: cliente.Settings, gw: GatewaySettings,
+                 store: observabilidad.EventStore | None = None) -> None:
         self.s = settings
         self.gw = gw
+        self.store = store   # observabilidad (None = desactivada)
         self.session = None
         self.tools: list[dict] = []
         self.instructions: str | None = None
@@ -133,6 +140,24 @@ async def _json_body(request: Request) -> dict[str, Any] | None:
     return body if isinstance(body, dict) else None
 
 
+async def _record(gateway: Gateway, conv: Conversation, conversation_id: str, user: str, delegated: bool,
+                  ts_start: str, started: float, question: str, answer: str | None, status: str,
+                  error: str | None, usage: dict[str, int]) -> None:
+    """Registra el turno en la observabilidad; un fallo aquí nunca afecta a la respuesta."""
+    if gateway.store is None:
+        return
+    try:
+        await asyncio.to_thread(
+            gateway.store.record_turn,
+            conversation=conversation_id, user=user, delegated=delegated, ts_start=ts_start,
+            ts_end=datetime.now().isoformat(), elapsed_s=time.perf_counter() - started,
+            question=question, answer=answer, status=status, error=error,
+            provider=gateway.s.provider, model=gateway.s.model, usage=usage,
+            events=list(conv.chat.last_turn_events))
+    except Exception:
+        log.exception("No se pudo registrar el turno en la observabilidad")
+
+
 def build_app(gateway: Gateway) -> Starlette:
     gw = gateway.gw
 
@@ -169,15 +194,23 @@ def build_app(gateway: Gateway) -> Starlette:
             log.info("[%s] %s%s: %s", conversation_id[:8], user,
                      " (con sus permisos de Zabbix)" if zabbix_auth else " (credencial de servicio del MCP)",
                      message[:200])
+            ts_start = datetime.now().isoformat()
+            started = time.perf_counter()
             try:
-                answer = await conv.chat.ask(message, zabbix_auth=zabbix_auth)
+                with observabilidad.trace_attributes(conversation_id, user):
+                    answer = await conv.chat.ask(message, zabbix_auth=zabbix_auth)
             except Exception as exc:
                 log.exception("Error procesando la pregunta de %s", user)
                 # Quita del historial la pregunta fallida para no arrastrar un estado roto.
                 conv.chat.discard_last_turn()
+                usage = {k: conv.chat.totals[k] - before[k] for k in conv.chat.totals}
+                await _record(gateway, conv, conversation_id, user, bool(zabbix_auth), ts_start, started,
+                              message, None, "error", f"{type(exc).__name__}: {exc}", usage)
                 return _error(502, f"Error consultando el LLM o el MCP: {type(exc).__name__}")
             conv.last_used = time.monotonic()
             usage = {k: conv.chat.totals[k] - before[k] for k in conv.chat.totals}
+            await _record(gateway, conv, conversation_id, user, bool(zabbix_auth), ts_start, started,
+                          message, answer, conv.chat.last_status, None, usage)
         return JSONResponse({"answer": answer, "tools_used": conv.chat.last_tools_used, "usage": usage})
 
     async def reset(request: Request) -> JSONResponse:
@@ -210,7 +243,9 @@ def main() -> None:
     if not gw.api_key:
         log.warning("GATEWAY_API_KEY vacía: cualquiera que alcance %s:%d puede usar la pasarela",
                     gw.host, gw.port)
-    app = build_app(Gateway(settings, gw))
+    obs = observabilidad.ObsSettings.from_env()
+    observabilidad.setup_phoenix(obs)   # antes de crear el modelo de LangChain
+    app = build_app(Gateway(settings, gw, observabilidad.open_store(obs)))
     uvicorn.run(app, host=gw.host, port=gw.port, log_level="warning")
 
 

@@ -1,0 +1,38 @@
+# Servicio systemd del panel de observabilidad del chat (panel.py, Streamlit).
+#
+# Instalación (ver README.md, sección "Observabilidad"):
+#   sudo cp mcp-panel.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mcp-panel
+#
+# Ajusta User y las rutas si no instalas en /opt/mcp-chat/mcp-client.
+
+[Unit]
+Description=Panel de observabilidad del chat MCP para Zabbix (panel.py)
+After=network-online.target
+Wants=network-online.target
+# Para arrancarlo junto con la pasarela, descomenta:
+#After=network-online.target mcp-pasarela.service
+#Wants=network-online.target mcp-pasarela.service
+
+[Service]
+Type=simple
+User=mcpchat
+Group=mcpchat
+# Importante: OBS_DB (logs/observabilidad.db) es relativo a este directorio.
+# El .env se lee siempre de la carpeta de panel.py. Pon PANEL_PASSWORD si lo expones.
+WorkingDirectory=/opt/mcp-chat/mcp-client
+ExecStart=/opt/mcp-chat/mcp-client/.venv/bin/streamlit run panel.py --server.address 127.0.0.1 --server.port 8501 --server.headless true --browser.gatherUsageStats false
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
+
+# Endurecimiento: SQLite en modo WAL necesita escribir el fichero -shm de logs/
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mcp-chat/mcp-client/logs
+
+[Install]
+WantedBy=multi-user.target

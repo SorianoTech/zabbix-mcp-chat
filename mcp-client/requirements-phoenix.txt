@@ -1,0 +1,7 @@
+# Opcional: trazas de la pasarela en Arize Phoenix (PHOENIX_ENABLED=true en .env)
+#   pip install -r requirements-phoenix.txt
+# El servidor Phoenix va aparte (otra máquina o entorno):
+#   pip install arize-phoenix && phoenix serve                 # UI y colector en :6006
+#   docker run -p 6006:6006 arizephoenix/phoenix:latest
+arize-phoenix-otel
+openinference-instrumentation-langchain
