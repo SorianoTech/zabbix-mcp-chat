@@ -170,6 +170,15 @@ html[color-scheme="dark"] .mcpchat {
 	text-align: center;
 }
 
+.mcpchat-help {
+	align-self: stretch;
+	max-width: none;
+	white-space: pre-line;
+	color: var(--mcpchat-muted);
+	border: 1px dashed var(--mcpchat-border);
+	background: var(--mcpchat-bg);
+}
+
 .mcpchat-error {
 	align-self: stretch;
 	max-width: none;
@@ -275,6 +284,50 @@ html[color-scheme="dark"] .mcpchat {
 	border-top: 1px solid var(--mcpchat-border);
 	background: var(--mcpchat-bg);
 	margin: 0;
+	position: relative;
+}
+
+/* Menú de comandos al escribir "/" (encima del campo de texto). */
+.mcpchat-cmds {
+	position: absolute;
+	left: 10px;
+	right: 10px;
+	bottom: 100%;
+	z-index: 1;
+	margin: 0 0 4px;
+	padding: 4px;
+	list-style: none;
+	background: var(--mcpchat-bg);
+	border: 1px solid var(--mcpchat-border);
+	border-radius: 6px;
+	box-shadow: var(--mcpchat-shadow);
+}
+
+.mcpchat-cmds[hidden] {
+	display: none;
+}
+
+.mcpchat-cmd {
+	display: flex;
+	gap: 8px;
+	margin: 0;
+	padding: 5px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.mcpchat-cmd-active {
+	background: var(--mcpchat-user-bg);
+}
+
+.mcpchat-cmd-name {
+	flex-shrink: 0;
+	font-family: monospace;
+	font-weight: bold;
+}
+
+.mcpchat-cmd-help {
+	color: var(--mcpchat-muted);
 }
 
 .mcpchat-input {

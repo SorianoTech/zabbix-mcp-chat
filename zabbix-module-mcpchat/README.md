@@ -64,6 +64,22 @@ nunca llegan al navegador.
 Para **cambiar la configuración después**, usa la API (`module.update` con `config` completo), o
 deshabilita el módulo, bórralo de la lista, edita `manifest.json` y vuelve a escanear.
 
+## Comandos del chat
+
+Al escribir `/` en el campo de texto aparece un menú con los comandos (↑/↓ para elegir, Enter para
+ejecutar, Tab para completar, Esc para cerrar). El saludo inicial lo indica y `/ayuda` los lista.
+Se resuelven en el navegador: **no llegan a la pasarela ni al LLM** y no gastan tokens.
+
+| Comando | Qué hace |
+|---|---|
+| `/nueva` (o `/reset`) | Empieza una conversación nueva, como el botón ⟳ (pide confirmación). |
+| `/limpiar` | Borra los mensajes de la pantalla; el asistente sigue recordando la conversación. |
+| `/ayuda` (o `/help`) | Muestra la lista de comandos. |
+
+Solo cuenta como comando una única palabra tras `/`: `/var/log/zabbix está lleno?` se envía como
+pregunta normal. Un comando desconocido (`/xyz`) muestra un aviso y tampoco se envía.
+Para añadir uno, amplía `COMMANDS` en `assets/js/mcpchat.js`.
+
 ## Seguridad
 
 - **El chat consulta Zabbix con los permisos del usuario conectado** (`delegate_user_session = true`).

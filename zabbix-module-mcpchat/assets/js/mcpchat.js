@@ -18,6 +18,8 @@
 	let messages = [];
 	let pending = false;
 	let els = {};
+	let menuItems = [];   // comandos visibles en el menú de "/"
+	let menuIndex = 0;
 
 	// ---------------------------------------------------------------- utilidades
 
@@ -166,7 +168,9 @@
 				'</header>' +
 				'<div class="mcpchat-messages" aria-live="polite"></div>' +
 				'<form class="mcpchat-form">' +
+					'<ul class="mcpchat-cmds" id="mcpchat-cmds" role="listbox" aria-label="Comandos" hidden></ul>' +
 					'<textarea class="mcpchat-input" rows="2" maxlength="4000"' +
+						' aria-autocomplete="list" aria-controls="mcpchat-cmds" aria-expanded="false"' +
 						' placeholder="Pregunta sobre tu monitorización… (Enter envía, Mayús+Enter salto de línea)"></textarea>' +
 					'<button type="submit" class="mcpchat-send" aria-label="Enviar">' + ICON_SEND + '</button>' +
 				'</form>' +
@@ -181,6 +185,7 @@
 			list: root.querySelector('.mcpchat-messages'),
 			form: root.querySelector('.mcpchat-form'),
 			input: root.querySelector('.mcpchat-input'),
+			menu: root.querySelector('.mcpchat-cmds'),
 			send: root.querySelector('.mcpchat-send'),
 			reset: root.querySelector('.mcpchat-reset'),
 			close: root.querySelector('.mcpchat-close')
@@ -194,7 +199,16 @@
 			e.preventDefault();
 			send();
 		});
+		els.input.addEventListener('input', () => {
+			menuIndex = 0;
+			updateCommandMenu();
+		});
+		els.input.addEventListener('blur', hideCommandMenu);
 		els.input.addEventListener('keydown', (e) => {
+			if (!els.menu.hidden && !e.isComposing && handleMenuKey(e)) {
+				e.preventDefault();
+				return;
+			}
 			if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
 				e.preventDefault();
 				send();
@@ -240,7 +254,10 @@
 	function renderAll() {
 		els.list.innerHTML = '';
 		if (!messages.length) {
-			renderMessage({role: 'info', text: 'Hola. Pregúntame por problemas, hosts, ítems o tendencias de Zabbix.'});
+			renderMessage({
+				role: 'info',
+				text: 'Hola. Pregúntame por problemas, hosts, ítems o tendencias de Zabbix. Escribe / para ver los comandos.'
+			});
 		}
 		messages.forEach(renderMessage);
 		scrollToEnd();
@@ -277,11 +294,144 @@
 		}
 	}
 
+	// ---------------------------------------------------------------- comandos
+	// Se resuelven en el navegador: no llegan a la pasarela ni al LLM (no gastan tokens).
+
+	const COMMANDS = [
+		{name: 'nueva', aliases: ['reset'], help: 'Empieza una conversación nueva: el asistente olvida la actual.',
+			run: () => resetConversation()},
+		{name: 'limpiar', aliases: [], help: 'Borra los mensajes de la pantalla; el asistente sigue recordándolos.',
+			run: () => clearScreen()},
+		{name: 'ayuda', aliases: ['help'], help: 'Muestra los comandos disponibles.', run: () => showHelp()}
+	];
+	// Una sola palabra tras "/": "/var/log/zabbix está lleno" o "/ruta algo" se envían como pregunta.
+	const COMMAND_RE = /^\/([a-zñ]*)$/i;
+
+	function findCommand(name) {
+		return COMMANDS.find((c) => c.name === name || c.aliases.includes(name));
+	}
+
+	// Devuelve true si el texto era un comando (y ya se ha ejecutado o rechazado).
+	function runCommand(text) {
+		const match = text.match(COMMAND_RE);
+		if (!match) {
+			return false;
+		}
+		const name = match[1].toLowerCase();
+		const command = findCommand(name === '' ? 'ayuda' : name);
+		els.input.value = '';
+		hideCommandMenu();
+		if (command) {
+			command.run();
+		}
+		else {
+			addMessage({role: 'info', text: 'Comando no reconocido: /' + name + '. Escribe /ayuda para ver los disponibles.'});
+		}
+		return true;
+	}
+
+	function showHelp() {
+		addMessage({
+			role: 'help',
+			text: 'Comandos (no se envían al asistente):\n' + COMMANDS.map((c) =>
+				'/' + c.name + (c.aliases.length ? ' (o /' + c.aliases.join(', /') + ')' : '') + ': ' + c.help
+			).join('\n')
+		});
+	}
+
+	function clearScreen() {
+		messages = [];
+		storageSet(storageKey + ':messages', messages);
+		renderAll();
+	}
+
+	function updateCommandMenu() {
+		const match = els.input.value.match(COMMAND_RE);
+		const prefix = match ? match[1].toLowerCase() : null;
+		menuItems = (prefix === null || pending) ? [] : COMMANDS.filter(
+			(c) => [c.name].concat(c.aliases).some((n) => n.startsWith(prefix))
+		);
+		if (!menuItems.length) {
+			hideCommandMenu();
+			return;
+		}
+		menuIndex = Math.min(menuIndex, menuItems.length - 1);
+		els.menu.innerHTML = '';
+		menuItems.forEach((command, i) => {
+			const li = document.createElement('li');
+			li.id = 'mcpchat-cmd-' + i;
+			li.className = 'mcpchat-cmd' + (i === menuIndex ? ' mcpchat-cmd-active' : '');
+			li.setAttribute('role', 'option');
+			li.setAttribute('aria-selected', String(i === menuIndex));
+			const name = document.createElement('span');
+			name.className = 'mcpchat-cmd-name';
+			name.textContent = '/' + command.name;
+			const help = document.createElement('span');
+			help.className = 'mcpchat-cmd-help';
+			help.textContent = command.help;
+			li.append(name, help);
+			// mousedown + preventDefault: el textarea no pierde el foco (su blur cerraría el menú).
+			li.addEventListener('mousedown', (e) => {
+				e.preventDefault();
+				executeMenuItem(i);
+			});
+			els.menu.appendChild(li);
+		});
+		els.menu.hidden = false;
+		els.input.setAttribute('aria-expanded', 'true');
+		els.input.setAttribute('aria-activedescendant', 'mcpchat-cmd-' + menuIndex);
+	}
+
+	function hideCommandMenu() {
+		els.menu.hidden = true;
+		els.menu.innerHTML = '';
+		menuItems = [];
+		els.input.setAttribute('aria-expanded', 'false');
+		els.input.removeAttribute('aria-activedescendant');
+	}
+
+	function executeMenuItem(i) {
+		const command = menuItems[i];
+		els.input.value = '';
+		hideCommandMenu();
+		if (command) {
+			command.run();
+		}
+		els.input.focus();
+	}
+
+	// Teclas con el menú abierto. Devuelve true si la tecla se ha consumido.
+	function handleMenuKey(e) {
+		const n = menuItems.length;
+		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			menuIndex = (menuIndex + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+			updateCommandMenu();
+			return true;
+		}
+		if (e.key === 'Tab') {
+			els.input.value = '/' + menuItems[menuIndex].name;
+			updateCommandMenu();
+			return true;
+		}
+		if (e.key === 'Enter' && !e.shiftKey) {
+			executeMenuItem(menuIndex);
+			return true;
+		}
+		if (e.key === 'Escape') {
+			hideCommandMenu();
+			return true;
+		}
+		return false;
+	}
+
 	// ---------------------------------------------------------------- acciones
 
 	async function send() {
 		const text = els.input.value.trim();
 		if (!text || pending) {
+			return;
+		}
+		if (runCommand(text)) {
 			return;
 		}
 		els.input.value = '';
