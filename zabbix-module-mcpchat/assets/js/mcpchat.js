@@ -294,6 +294,15 @@
 				addMessage({role: 'error', text: errorText(data.error)});
 			}
 			else {
+				// La pasarela perdió la memoria (caducidad, reinicio, reset en otra pestaña) pero aquí aún
+				// se ven respuestas anteriores: avisar de que el asistente ya no las recuerda.
+				const earlier = messages.slice(0, -1).some((m) => m.role === 'assistant');
+				if (data.new_conversation && earlier) {
+					addMessage({
+						role: 'info',
+						text: 'La conversación anterior caducó: el asistente no recuerda los mensajes previos a esta pregunta.'
+					});
+				}
 				addMessage({role: 'assistant', text: data.answer || '(sin respuesta)', tools: data.tools_used || []});
 			}
 		}
@@ -313,6 +322,9 @@
 
 	async function resetConversation() {
 		if (pending) {
+			return;
+		}
+		if (messages.length && !window.confirm('¿Empezar una conversación nueva? El asistente olvidará la actual.')) {
 			return;
 		}
 		try {

@@ -27,7 +27,7 @@ nunca llegan al navegador.
 | `actions/ChatBase.php` | Configuración, permisos, id de conversación y llamada HTTP a la pasarela (cURL o streams). |
 | `actions/ChatStatus.php` | `mcpchat.status` (GET): ¿puede este usuario usar el chat? + tokens CSRF. |
 | `actions/ChatSend.php` | `mcpchat.send` (POST JSON + CSRF): envía la pregunta y devuelve la respuesta. |
-| `actions/ChatReset.php` | `mcpchat.reset` (POST JSON + CSRF): empieza una conversación nueva. |
+| `actions/ChatReset.php` | `mcpchat.reset` (POST JSON + CSRF): empieza una conversación nueva (botón ⟳ de la cabecera, con confirmación). La pasarela lo rechaza si hay una pregunta en curso. |
 | `assets/js/mcpchat.js` | Globo y panel de chat (JS sin dependencias). Renderiza Markdown con todo el HTML escapado. |
 | `assets/css/mcpchat.css` | Estilos, con soporte de temas claros y oscuros de Zabbix. |
 
@@ -97,6 +97,7 @@ deshabilita el módulo, bórralo de la lista, edita `manifest.json` y vuelve a e
 | "Tu sesión ha caducado" | Sesión de Zabbix cerrada o token CSRF antiguo: recarga la página. |
 | "Session terminated, re-login" / "No permissions" en la respuesta | La sesión delegada ya no vale o el rol del usuario no tiene acceso a la API o a ese método: es Zabbix aplicando sus permisos. |
 | "This server only answers on behalf of a Zabbix user" | `delegate_user_session = false` en el módulo, pero el MCP tiene `delegated_auth = "required"`. |
+| "La conversación anterior caducó" | La pasarela olvidó la conversación (inactividad de `GATEWAY_IDLE_MINUTES`, `GATEWAY_MAX_CONVERSATIONS`, reinicio de la pasarela o ⟳ en otra pestaña). La respuesta ya no tiene en cuenta los mensajes anteriores. |
 | Respuestas lentas o caras | Revisa `TOOLS_ALLOW` y los ajustes de tokens de la pasarela (`mcp-client/README.md`) y analiza con `python analizar_contexto.py`. |
 
 Compatibilidad: probado con Zabbix 7.0.32 (contenedores oficiales `alpine-7.0-latest`, manifest v2). Zabbix 7.2/7.4 usan el mismo sistema de módulos,

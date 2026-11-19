@@ -10,8 +10,11 @@ Uso:
 Endpoints (todos exigen "Authorization: Bearer <GATEWAY_API_KEY>" si la clave está definida):
     GET  /health                                    -> estado y nº de conversaciones
     POST /chat   {"conversation", "user", "message", "zabbix_auth"}
-                                                    -> {"answer", "tools_used", "usage"}
-    POST /reset  {"conversation"}                    -> {"ok": true}
+                                                    -> {"answer", "tools_used", "usage", "new_conversation"}
+    POST /reset  {"conversation"}                    -> {"ok": true}  (409 si hay una pregunta en curso)
+
+"new_conversation" es true cuando el LLM respondió sin memoria previa (primera pregunta, tras /reset,
+o porque la conversación caducó o la pasarela se reinició): el módulo avisa al usuario.
 
 "zabbix_auth" es la credencial de Zabbix del usuario (su sesión del frontend). Se reenvía al
 servidor MCP en el _meta de cada llamada a herramienta para que Zabbix aplique SUS permisos.
@@ -29,6 +32,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -75,6 +79,9 @@ class GatewaySettings:
 @dataclass
 class Conversation:
     chat: cliente.ZabbixChat
+    # Id para la observabilidad: uno distinto por cada memoria del LLM (tras /reset o caducidad), aunque
+    # el id que envía el módulo (usuario + sesión de Zabbix) sea el mismo.
+    obs_id: str
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     last_used: float = field(default_factory=time.monotonic)
 
@@ -106,6 +113,14 @@ class Gateway:
             del self.conversations[cid]
             log.info("Conversación %s caducada por inactividad", cid)
 
+    def reset(self, conversation_id: str) -> bool:
+        """Olvida la conversación. False si tiene una pregunta en curso (no se toca)."""
+        conv = self.conversations.get(conversation_id)
+        if conv is not None and conv.lock.locked():
+            return False
+        self.conversations.pop(conversation_id, None)
+        return True
+
     def get(self, conversation_id: str, user: str) -> Conversation:
         self._expire()
         conv = self.conversations.get(conversation_id)
@@ -118,7 +133,8 @@ class Gateway:
                 raise RuntimeError("La pasarela aún no está conectada al servidor MCP")
             chat = cliente.ZabbixChat(self.s, self.session, self.tools, self.instructions,
                                       llm=self.llm, session_label=label)
-            conv = self.conversations[conversation_id] = Conversation(chat)
+            obs_id = f"{conversation_id}#{uuid.uuid4().hex[:8]}"
+            conv = self.conversations[conversation_id] = Conversation(chat, obs_id)
             log.info("Nueva conversación %s (usuario %s)", conversation_id[:8], user)
         conv.last_used = time.monotonic()
         return conv
@@ -143,7 +159,7 @@ async def _json_body(request: Request) -> dict[str, Any] | None:
     return body if isinstance(body, dict) else None
 
 
-async def _record(gateway: Gateway, conv: Conversation, conversation_id: str, user: str, delegated: bool,
+async def _record(gateway: Gateway, conv: Conversation, user: str, delegated: bool,
                   ts_start: str, started: float, question: str, answer: str | None, status: str,
                   error: str | None, usage: dict[str, int]) -> None:
     """Registra el turno en la observabilidad; un fallo aquí nunca afecta a la respuesta."""
@@ -152,7 +168,7 @@ async def _record(gateway: Gateway, conv: Conversation, conversation_id: str, us
     try:
         await asyncio.to_thread(
             gateway.store.record_turn,
-            conversation=conversation_id, user=user, delegated=delegated, ts_start=ts_start,
+            conversation=conv.obs_id, user=user, delegated=delegated, ts_start=ts_start,
             ts_end=datetime.now().isoformat(), elapsed_s=time.perf_counter() - started,
             question=question, answer=answer, status=status, error=error,
             provider=gateway.s.provider, model=gateway.s.model, usage=usage,
@@ -193,6 +209,7 @@ def build_app(gateway: Gateway) -> Starlette:
         if conv.lock.locked():
             return _error(409, "Ya hay una pregunta en curso en esta conversación")
         async with conv.lock:
+            new_conversation = not conv.chat.history
             before = dict(conv.chat.totals)
             log.info("[%s] %s%s: %s", conversation_id[:8], user,
                      " (con sus permisos de Zabbix)" if zabbix_auth else " (credencial de servicio del MCP)",
@@ -200,21 +217,22 @@ def build_app(gateway: Gateway) -> Starlette:
             ts_start = datetime.now().isoformat()
             started = time.perf_counter()
             try:
-                with observabilidad.trace_attributes(conversation_id, user):
+                with observabilidad.trace_attributes(conv.obs_id, user):
                     answer = await conv.chat.ask(message, zabbix_auth=zabbix_auth)
             except Exception as exc:
                 log.exception("Error procesando la pregunta de %s", user)
                 # Quita del historial la pregunta fallida para no arrastrar un estado roto.
                 conv.chat.discard_last_turn()
                 usage = {k: conv.chat.totals[k] - before[k] for k in conv.chat.totals}
-                await _record(gateway, conv, conversation_id, user, bool(zabbix_auth), ts_start, started,
+                await _record(gateway, conv, user, bool(zabbix_auth), ts_start, started,
                               message, None, "error", f"{type(exc).__name__}: {exc}", usage)
                 return _error(502, f"Error consultando el LLM o el MCP: {type(exc).__name__}")
             conv.last_used = time.monotonic()
             usage = {k: conv.chat.totals[k] - before[k] for k in conv.chat.totals}
-            await _record(gateway, conv, conversation_id, user, bool(zabbix_auth), ts_start, started,
+            await _record(gateway, conv, user, bool(zabbix_auth), ts_start, started,
                           message, answer, conv.chat.last_status, None, usage)
-        return JSONResponse({"answer": answer, "tools_used": conv.chat.last_tools_used, "usage": usage})
+        return JSONResponse({"answer": answer, "tools_used": conv.chat.last_tools_used, "usage": usage,
+                             "new_conversation": new_conversation})
 
     async def reset(request: Request) -> JSONResponse:
         if not _authorized(request, gw):
@@ -223,7 +241,8 @@ def build_app(gateway: Gateway) -> Starlette:
         conversation_id = str(body.get("conversation", ""))
         if not _CONVERSATION_RE.match(conversation_id):
             return _error(400, "Identificador de conversación no válido")
-        gateway.conversations.pop(conversation_id, None)
+        if not gateway.reset(conversation_id):
+            return _error(409, "Hay una pregunta en curso en esta conversación; espera a que termine")
         return JSONResponse({"ok": True})
 
     @asynccontextmanager

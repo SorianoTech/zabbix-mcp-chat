@@ -141,6 +141,8 @@ usuario de Zabbix, conversación, pregunta, respuesta o error, tokens (entrada, 
 cada llamada al LLM y cada llamada a herramienta con sus argumentos, duración, tamaño, si se recortó,
 si falló y su resultado (recortado a `OBS_TOOL_RESULT_MAX_CHARS`). La credencial de Zabbix del
 usuario **nunca** se guarda; solo si la pregunta se hizo con ella (columna «Credencial»).
+Cada memoria del LLM es una conversación distinta en el panel y en Phoenix (`<id>#<sufijo>`): el botón
+⟳ del chat, la caducidad por inactividad o un reinicio de la pasarela empiezan una nueva.
 Los datos se purgan pasados `OBS_RETENTION_DAYS` días. Desactívalo con `OBS_ENABLED=false`.
 
 **Panel** (Streamlit, lee la BD en solo lectura y se refresca cada 5/15/60 s):

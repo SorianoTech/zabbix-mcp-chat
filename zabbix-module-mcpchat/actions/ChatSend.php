@@ -5,7 +5,8 @@ namespace Modules\McpChat\Actions;
 /**
  * POST zabbix.php?action=mcpchat.send  (JSON: {"message": "...", "_csrf_token": "..."})
  *
- * Reenvía la pregunta a la pasarela y devuelve {"answer", "tools_used", "usage"} o {"error"}.
+ * Reenvía la pregunta a la pasarela y devuelve {"answer", "tools_used", "usage", "new_conversation"}
+ * o {"error"}. "new_conversation" = el asistente respondió sin recordar mensajes anteriores.
  */
 class ChatSend extends ChatBase {
 
@@ -62,7 +63,8 @@ class ChatSend extends ChatBase {
 		$this->respondJson([
 			'answer' => (string) ($result['body']['answer'] ?? ''),
 			'tools_used' => array_values(array_map('strval', (array) ($result['body']['tools_used'] ?? []))),
-			'usage' => (array) ($result['body']['usage'] ?? [])
+			'usage' => (array) ($result['body']['usage'] ?? []),
+			'new_conversation' => (bool) ($result['body']['new_conversation'] ?? false)
 		]);
 	}
 }
